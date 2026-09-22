@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}VisionGuard | Dashboard{% endblock %}
+{% block content %}
+<section class="page-heading">
+  <div>
+    <p class="eyebrow">Live monitoring overview</p>
+    <h1>VisionGuard</h1>
+    <p class="muted">Fire &amp; smoke detection visibility across monitored sources.</p>
+  </div>
+  <div class="operational-chip"><span class="status-dot active"></span>{{ system_status.application_status }}</div>
+</section>
+
+<section class="metrics-grid" aria-label="Monitoring summary">
+  <article class="metric-card">
+    <span class="metric-label">Active Cameras</span>
+    <strong>{{ metrics.active_cameras }}</strong>
+    <small>{{ system_status.total_sources }} configured sources</small>
+  </article>
+  <article class="metric-card">
+    <span class="metric-label">Total Incidents</span>
+    <strong>{{ metrics.total_incidents }}</strong>
+    <small>Deterministic event history</small>
+  </article>
+  <article class="metric-card fire-accent">
+    <span class="metric-label">Fire Alerts</span>
+    <strong>{{ metrics.fire_alerts }}</strong>
+    <small>Requires immediate attention</small>
+  </article>
+  <article class="metric-card smoke-accent">
+    <span class="metric-label">Smoke Alerts</span>
+    <strong>{{ metrics.smoke_alerts }}</strong>
+    <small>Review monitoring conditions</small>
+  </article>
+</section>
+
+<section class="content-grid">
+  <article class="panel">
+    <div class="panel-heading">
+      <div>
+        <p class="eyebrow">Detection activity</p>
+        <h2>Recent Detection Events</h2>
+      </div>
+      <a class="text-link" href="{{ url_for('incidents') }}">View all incidents</a>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <caption class="sr-only">Recent fire and smoke detection events</caption>
+        <thead>
+          <tr>
+            <th scope="col">Event</th>
+            <th scope="col">Type</th>
+            <th scope="col">Source</th>
+            <th scope="col">Confidence</th>
+            <th scope="col">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for event in recent_events %}
+          <tr>
+            <td><strong>{{ event.id }}</strong><br><small>{{ event.detected_at.strftime('%b %d, %Y %H:%M UTC') }}</small></td>
+            <td><span class="badge {{ event.event_type.value }}">{{ event.event_type.value|title }}</span></td>
+            <td>{{ event.camera_name }}</td>
+            <td>{{ (event.confidence * 100)|round|int }}%</td>
+            <td><span class="severity {{ event.severity.value }}">{{ event.status }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+
+  <aside class="panel status-panel">
+    <p class="eyebrow">System health</p>
+    <h2>Monitoring Status</h2>
+    <dl class="status-list">
+      <div><dt>Application</dt><dd><span class="status-dot active"></span>{{ system_status.application_status }}</dd></div>
+      <div><dt>Provider</dt><dd>{{ system_status.provider.name }}</dd></div>
+      <div><dt>Provider status</dt><dd>{{ system_status.provider.status }}</dd></div>
+      <div><dt>Processing</dt><dd>{{ system_status.provider.processing_status }}</dd></div>
+      <div><dt>Active sources</dt><dd>{{ system_status.active_sources }} of {{ system_status.total_sources }}</dd></div>
+    </dl>
+    <a class="button" href="{{ url_for('status') }}">View system status</a>
+  </aside>
+</section>
+{% endblock %}

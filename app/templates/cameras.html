@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}VisionGuard | Camera Sources{% endblock %}
+{% block content %}
+<section class="page-heading">
+  <div>
+    <p class="eyebrow">Source inventory</p>
+    <h1>Camera Sources</h1>
+    <p class="muted">Sample sources modelled for a future RTSP or video integration.</p>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="table-wrap">
+    <table>
+      <caption class="sr-only">Configured VisionGuard camera sources</caption>
+      <thead>
+        <tr>
+          <th scope="col">Camera</th>
+          <th scope="col">Identifier</th>
+          <th scope="col">Location</th>
+          <th scope="col">Source Type</th>
+          <th scope="col">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for camera in cameras %}
+        <tr>
+          <td><strong>{{ camera.name }}</strong></td>
+          <td><code>{{ camera.id }}</code></td>
+          <td>{{ camera.location }}</td>
+          <td>{{ camera.source_type }}</td>
+          <td><span class="source-status {{ camera.status.value }}"><span class="status-dot {{ camera.status.value }}"></span>{{ camera.status.value|title }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}VisionGuard | Incident History{% endblock %}
+{% block content %}
+<section class="page-heading">
+  <div>
+    <p class="eyebrow">Detection records</p>
+    <h1>Incident History</h1>
+    <p class="muted">Review deterministic fire and smoke events captured by VisionGuard.</p>
+  </div>
+</section>
+
+<nav class="filter-tabs" aria-label="Incident type filters">
+  <a class="{% if selected_type == 'all' %}active{% endif %}" href="{{ url_for('incidents') }}?type=all">All</a>
+  <a class="{% if selected_type == 'fire' %}active{% endif %}" href="{{ url_for('incidents') }}?type=fire">Fire</a>
+  <a class="{% if selected_type == 'smoke' %}active{% endif %}" href="{{ url_for('incidents') }}?type=smoke">Smoke</a>
+</nav>
+
+<section class="panel">
+  <div class="table-wrap">
+    <table>
+      <caption class="sr-only">Filtered detection event history</caption>
+      <thead>
+        <tr>
+          <th scope="col">Event</th>
+          <th scope="col">Detection Type</th>
+          <th scope="col">Camera / Source</th>
+          <th scope="col">Confidence</th>
+          <th scope="col">Severity</th>
+          <th scope="col">Handling Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for event in events %}
+        <tr>
+          <td><strong>{{ event.id }}</strong><br><small>{{ event.detected_at.strftime('%b %d, %Y %H:%M UTC') }}</small></td>
+          <td><span class="badge {{ event.event_type.value }}">{{ event.event_type.value|title }}</span></td>
+          <td>{{ event.camera_name }}<br><small>{{ event.camera_id }}</small></td>
+          <td>{{ (event.confidence * 100)|round|int }}%</td>
+          <td><span class="severity {{ event.severity.value }}">{{ event.severity.value|title }}</span></td>
+          <td>{{ event.status }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="empty-state">No matching detection events are available.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

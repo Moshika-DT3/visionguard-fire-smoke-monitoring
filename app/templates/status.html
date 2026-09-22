@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}VisionGuard | System Status{% endblock %}
+{% block content %}
+<section class="page-heading">
+  <div>
+    <p class="eyebrow">Operational readiness</p>
+    <h1>System Status</h1>
+    <p class="muted">Current application and detection-provider availability.</p>
+  </div>
+</section>
+
+<section class="status-cards">
+  <article class="panel status-card">
+    <p class="eyebrow">Application</p>
+    <h2>{{ system_status.application_status }}</h2>
+    <p><span class="status-dot active"></span>VisionGuard web monitoring is available.</p>
+  </article>
+  <article class="panel status-card">
+    <p class="eyebrow">Detection Provider</p>
+    <h2>{{ system_status.provider.name }}</h2>
+    <p><span class="status-dot active"></span>{{ system_status.provider.status }}</p>
+  </article>
+  <article class="panel status-card">
+    <p class="eyebrow">Processing</p>
+    <h2>Ready</h2>
+    <p>{{ system_status.provider.processing_status }}</p>
+  </article>
+  <article class="panel status-card">
+    <p class="eyebrow">Active Sources</p>
+    <h2>{{ system_status.active_sources }} / {{ system_status.total_sources }}</h2>
+    <p>Configured sample cameras currently active.</p>
+  </article>
+</section>
+
+<section class="panel integration-note">
+  <p class="eyebrow">Integration boundary</p>
+  <h2>Future VisionAI adapter</h2>
+  <p>The current <strong>Mock Detection Provider</strong> supplies deterministic sample data. A future VisionAI Framework package can be wrapped in a provider adapter that returns the same source and event models, without changing these pages or APIs.</p>
+</section>
+{% endblock %}
