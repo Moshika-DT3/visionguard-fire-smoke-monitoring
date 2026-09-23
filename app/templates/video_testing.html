@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}VisionGuard | Video Testing{% endblock %}
+{% block content %}
+<section class="page-heading">
+  <div>
+    <p class="eyebrow">Workflow validation</p>
+    <h1>Video Testing</h1>
+    <p class="muted">Upload an MP4 to preview and process through the deterministic Mock Video Analysis flow.</p>
+  </div>
+  <div class="operational-chip"><span class="status-dot active"></span>Mock workflow ready</div>
+</section>
+
+<section class="video-testing-grid">
+  <article class="panel">
+    <div class="panel-heading">
+      <div>
+        <p class="eyebrow">Step 1</p>
+        <h2>Upload &amp; Preview</h2>
+      </div>
+    </div>
+    <form id="video-upload-form" class="video-upload-form" novalidate>
+      <label class="upload-dropzone" for="video-file">
+        <span class="upload-icon" aria-hidden="true">↑</span>
+        <strong>Select an MP4 video</strong>
+        <span>Demo files remain local to this application session.</span>
+        <input id="video-file" name="file" type="file" accept="video/mp4,.mp4" required>
+      </label>
+      <p id="upload-error" class="form-message error" role="alert" hidden></p>
+      <p id="selected-filename" class="selected-filename" aria-live="polite">No file selected.</p>
+      <button id="upload-button" class="button button-inline" type="submit">Upload video</button>
+    </form>
+
+    <div id="preview-container" class="preview-container" hidden>
+      <p class="eyebrow">Uploaded preview</p>
+      <video id="video-preview" class="video-preview" controls preload="metadata">
+        Your browser does not support MP4 video preview.
+      </video>
+      <p id="uploaded-filename" class="muted"></p>
+      <button id="analyze-button" class="button button-inline" type="button">Run Mock Analysis</button>
+    </div>
+  </article>
+
+  <aside class="panel result-panel" aria-live="polite">
+    <p class="eyebrow">Step 2</p>
+    <h2>Analysis Result</h2>
+    <div id="analysis-empty" class="analysis-empty">
+      <p>Upload an MP4 and run analysis to see a deterministic workflow result.</p>
+      <small>Provider: Mock Video Analysis</small>
+    </div>
+    <div id="analysis-result" hidden>
+      <span id="outcome-badge" class="badge"></span>
+      <dl class="result-list">
+        <div><dt>Video</dt><dd id="result-filename"></dd></div>
+        <div><dt>Outcome</dt><dd id="result-outcome"></dd></div>
+        <div id="confidence-row"><dt>Mock confidence</dt><dd id="result-confidence"></dd></div>
+        <div><dt>Analysis status</dt><dd id="result-status"></dd></div>
+        <div><dt>Provider</dt><dd id="result-provider"></dd></div>
+        <div><dt>Incident flow</dt><dd id="result-incident"></dd></div>
+      </dl>
+      <p id="result-note" class="result-note"></p>
+    </div>
+  </aside>
+</section>
+{% endblock %}
+
+{% block page_scripts %}
+<script src="{{ url_for('static', path='/js/video_testing.js') }}" defer></script>
+{% endblock %}

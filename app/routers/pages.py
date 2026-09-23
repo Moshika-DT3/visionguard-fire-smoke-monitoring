@@ -81,6 +81,22 @@ def create_page_router(
         )
 
     @router.get(
+        "/video-testing",
+        summary="Render Video Testing",
+        description=(
+            "Displays local MP4 upload, browser preview, and deterministic "
+            "mock-analysis workflow validation."
+        ),
+    )
+    async def video_testing(request: Request):
+        """Render the Video Testing page without changing monitoring workflows."""
+        return templates.TemplateResponse(
+            request=request,
+            name="video_testing.html",
+            context={},
+        )
+
+    @router.get(
         "/status",
         summary="Render system status",
         description="Displays the application and active detection provider status.",

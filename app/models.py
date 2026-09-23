@@ -86,3 +86,33 @@ class DashboardMetrics(BaseModel):
     total_incidents: int = Field(..., description="Number of known detection events.")
     fire_alerts: int = Field(..., description="Number of fire detection events.")
     smoke_alerts: int = Field(..., description="Number of smoke detection events.")
+
+
+class VideoAnalysisOutcome(str, Enum):
+    """Supported deterministic outcomes for uploaded demo videos."""
+
+    FIRE = "fire"
+    SMOKE = "smoke"
+    NO_DETECTION = "no_detection"
+
+
+class VideoAnalysisResult(BaseModel):
+    """Result produced by a replaceable uploaded-video analysis adapter."""
+
+    filename: str = Field(..., description="Original uploaded MP4 filename.")
+    outcome: VideoAnalysisOutcome = Field(
+        ...,
+        description="Deterministic mock hazard outcome for the uploaded video.",
+    )
+    confidence: float | None = Field(
+        default=None,
+        ge=0,
+        le=1,
+        description="Mock confidence for positive detections only.",
+    )
+    status: str = Field(..., description="Completion state of the analysis request.")
+    provider: str = Field(..., description="Name of the video analysis adapter.")
+    incident_created: bool = Field(
+        ...,
+        description="Whether this result created a new monitoring incident.",
+    )

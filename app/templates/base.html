@@ -19,6 +19,7 @@
     <nav aria-label="Primary navigation">
       <a href="{{ url_for('dashboard') }}">Dashboard</a>
       <a href="{{ url_for('cameras') }}">Camera Sources</a>
+      <a href="{{ url_for('video_testing') }}">Video Testing</a>
       <a href="{{ url_for('incidents') }}">Incident History</a>
       <a href="{{ url_for('status') }}">System Status</a>
     </nav>
@@ -33,5 +34,6 @@
     <span>Powered by Mock Detection Provider</span>
   </footer>
   <script src="{{ url_for('static', path='/js/dashboard.js') }}" defer></script>
+  {% block page_scripts %}{% endblock %}
 </body>
 </html>

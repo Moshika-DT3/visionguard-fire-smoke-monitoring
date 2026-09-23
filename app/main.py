@@ -12,13 +12,16 @@ from app.providers.mock import MockDetectionProvider
 from app.routers.api import create_api_router
 from app.routers.pages import create_page_router
 from app.services.monitoring import MonitoringService
+from app.services.video_analysis import MockVideoAnalysisAdapter
 
 APP_DIRECTORY = Path(__file__).resolve().parent
+UPLOAD_DIRECTORY = APP_DIRECTORY / "uploads"
 
 # Provider composition boundary: replace this implementation with a future
 # VisionAI adapter that satisfies DetectionProvider without changing routes or UI.
 provider = MockDetectionProvider()
 monitoring_service = MonitoringService(provider)
+video_analysis_adapter = MockVideoAnalysisAdapter()
 templates = Jinja2Templates(directory=str(APP_DIRECTORY / "templates"))
 
 app = FastAPI(
@@ -41,4 +44,10 @@ app = FastAPI(
 )
 app.mount("/static", StaticFiles(directory=str(APP_DIRECTORY / "static")), name="static")
 app.include_router(create_page_router(templates, monitoring_service))
-app.include_router(create_api_router(monitoring_service))
+app.include_router(
+    create_api_router(
+        monitoring_service,
+        video_analysis_adapter,
+        UPLOAD_DIRECTORY,
+    )
+)
