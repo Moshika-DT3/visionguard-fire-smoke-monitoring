@@ -1,12 +1,14 @@
 # VisionGuard - Fire & Smoke Monitoring
 
-VisionGuard is a standalone, demo-ready fire and smoke monitoring application built with Python, FastAPI, and Jinja2 templates. It runs entirely from deterministic in-memory sample data supplied by the current **Mock Detection Provider**. The baseline does not require a database, authentication, Docker, cloud services, RTSP input, or machine-learning inference.
+VisionGuard is a standalone, demo-ready fire and smoke monitoring application built with Python, FastAPI, and Jinja2 templates. It starts with deterministic in-memory sample data supplied by the current **Mock Detection Provider** and supports local MP4 uploads for preview and filename-only mock analysis. The baseline does not require a database, authentication, Docker, cloud services, RTSP input, or machine-learning inference.
+
+> **Important:** The current Fire/Smoke video analysis uses deterministic mock logic for testing and demonstration purposes. It does **not** perform real machine-learning or VisionAI inference. Real VisionAI-based detection is planned for a future integration.
 
 ## Baseline capabilities
 
 The dashboard at `/` presents the VisionGuard title, active camera count, total incident count, Fire and Smoke alert counts, operational status, and recent detection events. The application also includes camera inventory, incident history, and system-status pages with a responsive local HTML, CSS, and JavaScript interface.
 
-The sample camera inventory includes stable source identifiers, names, locations, active or offline status, and the `sample_rtsp` source type. Detection events are fixed and consistently ordered, with Fire or Smoke type, source information, confidence, timestamp, severity, handling status, and stable event identifiers.
+The sample camera inventory includes stable source identifiers, names, locations, active or offline status, and the `sample_rtsp` source type. Sample detection events are fixed and consistently ordered, with Fire or Smoke type, source information, confidence, timestamp, severity, handling status, and stable event identifiers.
 
 ## Architecture
 
@@ -18,7 +20,7 @@ MockDetectionProvider -> MonitoringService -> FastAPI routes -> Jinja2 pages and
 
 `app/providers/base.py` defines the read-only `DetectionProvider` contract. `app/providers/mock.py` implements that contract with deterministic sample cameras and events. `app/services/monitoring.py` consumes the contract to calculate dashboard metrics, filter incidents, and build system status. Page and API routes consume `MonitoringService`, rather than importing mock data directly.
 
-Application composition is isolated in `app/main.py`, where `MockDetectionProvider` is instantiated and supplied to `MonitoringService`.
+Application composition is isolated in `app/main.py`, where `MockDetectionProvider` is instantiated and supplied to `MonitoringService`. A separate `MockVideoAnalysisAdapter` from `app/services/video_analysis.py` supplies filename-only results to the Video Testing API, which adds positive results to the monitoring service as session-local incidents.
 
 ## Installation
 
@@ -61,6 +63,7 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 | `/incidents` | Full detection-event history. |
 | `/incidents?type=fire` | Fire-only incident history. |
 | `/incidents?type=smoke` | Smoke-only incident history. |
+| `/video-testing` | Local MP4 upload, browser preview, and deterministic mock analysis. |
 | `/status` | Application and provider operational status. |
 
 ## JSON API
@@ -69,7 +72,7 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 | --- | --- |
 | `GET /api/health` | Application status, provider status, active-source count, and total-source count. |
 | `GET /api/cameras` | Deterministic camera sources with identifiers, locations, availability status, and source types. |
-| `GET /api/events` | Deterministic Fire and Smoke detection events in newest-first order. |
+| `GET /api/events` | Fixed sample Fire and Smoke events, preceded by any session-created mock video incidents, newest first. |
 
 The monitoring APIs above are read-only. Video Testing additionally supports
 `POST /api/video-tests/upload`, `GET /api/video-tests/uploads/{video_id}`, and
@@ -97,9 +100,10 @@ background detection work.
 - Non-MP4 extensions and unsupported declared MIME types return HTTP 400.
   Validation does **not** prove the bytes contain a playable MP4: the mock
   workflow intentionally does not decode media, inspect frames, or run ML.
-- Analysis still uses the supplied filename (`fire_test` -> fire, `smoke_vd` ->
-  smoke, otherwise no detection), with the existing per-session incident
-  deduplication. Uploading alone never creates an incident.
+
+Analysis uses only the supplied filename, not the uploaded video content. Case-insensitive substring matching on the filename stem maps `fire_test` to Fire with 96% mock confidence, `smoke_vd` to Smoke with 89% mock confidence, and all other names to No Detection without confidence. If both patterns occur, Fire takes precedence. These values are fixed demonstration outputs, not model predictions.
+
+A positive result creates an in-memory incident visible in the dashboard, incident history, and events API, and increases the corresponding incident and alert counts. The incident uses the current UTC timestamp and the status `New — mock video analysis`. Positive results are deduplicated by the supplied filename, case-insensitively, for the application session, even when separate uploads have different IDs. No Detection and uploading alone never create incidents. The Video Testing UI submits the original filename returned by the upload endpoint.
 
 The size limit applies to the saved file after FastAPI parses multipart data,
 not to the entire incoming HTTP request. This local demo has no total-session
@@ -114,7 +118,7 @@ generated videos and resets in-memory incidents.
 - Five historical detection events: two Fire events and three Smoke events.
 - A provider status named `Mock Detection Provider` with an operational, ready processing state.
 
-This deterministic behavior keeps the demo repeatable and allows the dashboard, pages, and API to show the same data on every run.
+This deterministic behavior keeps the initial demo state repeatable. Positive Video Testing results add session-local incidents without changing the provider's fixed sample records or camera inventory; restarting restores the initial counts.
 
 ## Future VisionAI Framework integration
 
@@ -127,6 +131,8 @@ The intended future data flow is:
 ```text
 RTSP or video -> VisionAI Framework package -> VisionAIAdapter -> MonitoringService -> VisionGuard pages and API
 ```
+
+Uploaded-video inference would also require replacing the separate `MockVideoAnalysisAdapter` with an implementation that actually processes the saved video. Changing the monitoring provider alone does not enable real inference in Video Testing. Neither integration is implemented today.
 
 ## Baseline boundaries
 
