@@ -71,7 +71,40 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 | `GET /api/cameras` | Deterministic camera sources with identifiers, locations, availability status, and source types. |
 | `GET /api/events` | Deterministic Fire and Smoke detection events in newest-first order. |
 
-The API is read-only in this baseline. It contains no mutation endpoints and does not create background detection work.
+The monitoring APIs above are read-only. Video Testing additionally supports
+`POST /api/video-tests/upload`, `GET /api/video-tests/uploads/{video_id}`, and
+`POST /api/video-tests/{video_id}/analyze?filename=...`; it does not create
+background detection work.
+
+## Video Testing upload lifecycle
+
+- Open `/video-testing` to upload, preview, and run deterministic mock analysis.
+- Videos are stored locally in `app/uploads/` under unique UUID-based `.mp4`
+  names. This entire runtime directory is ignored by Git.
+- Successful uploads remain available during the current application session.
+  Repeated filenames receive separate IDs and never overwrite earlier uploads.
+  Only generated UUID-named MP4 files are removed on application startup and
+  graceful shutdown; startup also removes leftovers after an interrupted run.
+  Unrelated files are not removed. Run a single local application process.
+- The default limit is **100 MiB per file**. Optional `VIDEO_UPLOAD_MAX_BYTES`
+  overrides it with a positive integer byte count at application startup.
+  Request this variable for environment setup if a different limit is needed.
+  The application does not load `.env` itself; the launcher must supply it.
+- Uploads are copied in 1 MiB chunks rather than read entirely into memory.
+  Empty files return HTTP 400; files over the limit return HTTP 413. Failed
+  writes and rejected files do not retain partial output, and upload handles
+  are closed. Storage errors return HTTP 500.
+- Non-MP4 extensions and unsupported declared MIME types return HTTP 400.
+  Validation does **not** prove the bytes contain a playable MP4: the mock
+  workflow intentionally does not decode media, inspect frames, or run ML.
+- Analysis still uses the supplied filename (`fire_test` -> fire, `smoke_vd` ->
+  smoke, otherwise no detection), with the existing per-session incident
+  deduplication. Uploading alone never creates an incident.
+
+The size limit applies to the saved file after FastAPI parses multipart data,
+not to the entire incoming HTTP request. This local demo has no total-session
+disk quota, expiration timer, cloud storage, or database; restarting clears
+generated videos and resets in-memory incidents.
 
 ## Mock Detection Provider
 

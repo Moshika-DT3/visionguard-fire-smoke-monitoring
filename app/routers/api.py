@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from uuid import uuid4
 
@@ -19,6 +20,9 @@ from app.services.monitoring import MonitoringService
 from app.services.video_analysis import MockVideoAnalysisAdapter
 
 ALLOWED_VIDEO_CONTENT_TYPES = {"video/mp4", "application/mp4"}
+DEFAULT_MAX_UPLOAD_BYTES = 100 * 1024 * 1024
+UPLOAD_CHUNK_BYTES = 1024 * 1024
+logger = logging.getLogger(__name__)
 
 
 # PUBLIC_INTERFACE
@@ -26,6 +30,8 @@ def create_api_router(
     monitoring_service: MonitoringService,
     video_analysis_adapter: MockVideoAnalysisAdapter,
     upload_directory: Path,
+    *,
+    max_upload_bytes: int = DEFAULT_MAX_UPLOAD_BYTES,
 ) -> APIRouter:
     """Create JSON APIs for monitoring data and deterministic video testing.
 
@@ -33,10 +39,13 @@ def create_api_router(
         monitoring_service: Service supplying monitoring views and event creation.
         video_analysis_adapter: Replaceable uploaded-video analysis component.
         upload_directory: Application-controlled directory for uploaded MP4 files.
+        max_upload_bytes: Positive maximum saved file size, excluding multipart overhead.
 
     Returns:
         Router exposing existing monitoring APIs and Video Testing endpoints.
     """
+    if max_upload_bytes <= 0:
+        raise ValueError("max_upload_bytes must be positive")
     router = APIRouter(prefix="/api", tags=["Monitoring API"])
 
     @router.get(
@@ -77,36 +86,76 @@ def create_api_router(
         summary="Upload an MP4 video for testing",
         description=(
             "Stores a local demo MP4 for browser preview and deterministic mock "
-            "workflow validation. Only MP4 uploads are accepted."
+            "workflow validation. Only nonempty MP4 uploads within the configured "
+            "size limit are accepted. Validation uses extension and declared MIME "
+            "type, not video decoding."
         ),
         responses={
-            400: {"description": "No file or unsupported file type supplied."},
+            400: {"description": "Empty file or unsupported file type supplied."},
+            413: {"description": "Video exceeds the configured upload size limit."},
+            500: {"description": "Local upload storage failed."},
         },
     )
+    # PUBLIC_INTERFACE
     async def upload_video(file: UploadFile = File(...)) -> dict[str, str]:
-        """Store one MP4 upload and return its application-controlled identifier."""
-        supplied_name = file.filename or ""
-        is_mp4_extension = supplied_name.casefold().endswith(".mp4")
-        is_accepted_type = (
-            not file.content_type or file.content_type in ALLOWED_VIDEO_CONTENT_TYPES
-        )
-        if not supplied_name or not is_mp4_extension or not is_accepted_type:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Please select a valid MP4 video file.",
+        """Save multipart ``file`` in bounded chunks and return ID/name/preview URL.
+
+        Reject empty, unsupported or oversized files without retaining partial
+        output. This demo deliberately does not inspect or decode media bytes.
+        """
+        destination = None
+        created = False
+        completed = False
+        try:
+            supplied_name = file.filename or ""
+            is_mp4_extension = supplied_name.casefold().endswith(".mp4")
+            is_accepted_type = (
+                not file.content_type or file.content_type in ALLOWED_VIDEO_CONTENT_TYPES
             )
+            if not supplied_name or not is_mp4_extension or not is_accepted_type:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Please select a valid MP4 video file.",
+                )
 
-        upload_directory.mkdir(parents=True, exist_ok=True)
-        stored_name = f"{uuid4().hex}.mp4"
-        destination = upload_directory / stored_name
-        content = await file.read()
-        destination.write_bytes(content)
-
-        return {
-            "video_id": stored_name,
-            "filename": Path(supplied_name).name,
-            "preview_url": f"/api/video-tests/uploads/{stored_name}",
-        }
+            upload_directory.mkdir(parents=True, exist_ok=True)
+            stored_name = f"{uuid4().hex}.mp4"
+            destination = upload_directory / stored_name
+            size = 0
+            # Exclusive creation protects existing uploads even on an ID collision.
+            with destination.open("xb") as output:
+                created = True
+                while chunk := await file.read(UPLOAD_CHUNK_BYTES):
+                    size += len(chunk)
+                    if size > max_upload_bytes:
+                        raise HTTPException(
+                            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                            detail=f"Video exceeds the {max_upload_bytes}-byte upload limit.",
+                        )
+                    output.write(chunk)
+            if size == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Please select a nonempty MP4 video file.",
+                )
+            completed = True
+            return {
+                "video_id": stored_name,
+                "filename": Path(supplied_name).name,
+                "preview_url": f"/api/video-tests/uploads/{stored_name}",
+            }
+        except OSError as error:
+            logger.exception("Unable to store demo video upload")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="The video could not be saved to local storage.",
+            ) from error
+        finally:
+            try:
+                if created and not completed:
+                    destination.unlink(missing_ok=True)
+            finally:
+                await file.close()
 
     @router.get(
         "/video-tests/uploads/{video_id}",

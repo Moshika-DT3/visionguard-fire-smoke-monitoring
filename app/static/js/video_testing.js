@@ -66,6 +66,8 @@ document.addEventListener("DOMContentLoaded", () => {
     clearError();
     uploadButton.disabled = true;
     uploadButton.textContent = "Uploading…";
+    analyzeButton.disabled = true;
+    fileInput.disabled = true;
 
     try {
       const payload = new FormData();
@@ -92,6 +94,8 @@ document.addEventListener("DOMContentLoaded", () => {
     } finally {
       uploadButton.disabled = false;
       uploadButton.textContent = "Upload video";
+      fileInput.disabled = false;
+      analyzeButton.disabled = !uploadedVideo;
     }
   });
 
@@ -104,6 +108,8 @@ document.addEventListener("DOMContentLoaded", () => {
     clearError();
     analyzeButton.disabled = true;
     analyzeButton.textContent = "Analyzing…";
+    uploadButton.disabled = true;
+    fileInput.disabled = true;
 
     try {
       const response = await fetch(
@@ -147,6 +153,8 @@ document.addEventListener("DOMContentLoaded", () => {
     } finally {
       analyzeButton.disabled = false;
       analyzeButton.textContent = "Run Mock Analysis";
+      uploadButton.disabled = false;
+      fileInput.disabled = false;
     }
   });
 });
