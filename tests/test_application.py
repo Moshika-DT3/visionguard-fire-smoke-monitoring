@@ -18,8 +18,9 @@ or video decoding.
 Read-only smoke checks also verify the actual app.main:app composition.
 
 Current boundaries (not new requirements): upload validation checks extension and
-declared MIME type, not MP4 bytes, size or nonempty content. Analysis trusts the
-query filename, not an association with the saved upload. Dedupe is per service
+declared MIME type and rejects empty content, but imposes no file-size limit or
+MP4 byte inspection. Analysis trusts the query filename, not an association with
+the saved upload. Dedupe is per service
 session and case-insensitive filename, not file content or upload ID. Browser
 JavaScript execution and actual media playback require separate browser tests.
 If those contracts change later, application changes and new tests are needed.
@@ -281,6 +282,58 @@ def test_mp4_upload_and_preview(client, tmp_path, filename, mime):
     assert preview.status_code == 200
     assert preview.headers["content-type"] == "video/mp4"
     assert preview.content == content
+
+
+# PUBLIC_INTERFACE
+def test_167_mib_no_fire_upload_preview_and_analysis(client, service, tmp_path):
+    """Accept a 167 MiB multipart file and preserve No Detection monitoring state.
+
+    Synthetic bytes exercise the size contract, not browser media decoding.
+    167 MiB also exceeds the reported 167 MB when MB uses decimal units.
+    """
+    size = 167 * 1024 * 1024
+    source = tmp_path / "no fire.mp4"
+    # A sparse fixture avoids allocating the full video in a Python bytes object.
+    with source.open("wb") as handle:
+        handle.write(b"synthetic video fixture")
+        handle.truncate(size)
+
+    before_events = client.get("/api/events").json()
+    before_metrics = service.get_metrics().model_dump()
+    before_dashboard = client.get("/").text
+    before_history = client.get("/incidents").text
+    with source.open("rb") as handle:
+        response = client.post(
+            "/api/video-tests/upload",
+            files={"file": (source.name, handle, "video/mp4")},
+        )
+    assert response.status_code == 200, response.text
+    upload = response.json()
+    assert upload["filename"] == "no fire.mp4"
+    assert (tmp_path / upload["video_id"]).stat().st_size == size
+    assert client.get("/api/events").json() == before_events
+
+    # Fetch a bounded preview range while checking the total uploaded size.
+    preview = client.get(upload["preview_url"], headers={"Range": "bytes=0-31"})
+    assert preview.status_code == 206
+    assert preview.headers["content-type"] == "video/mp4"
+    assert preview.headers["content-range"] == f"bytes 0-31/{size}"
+    with source.open("rb") as handle:
+        assert preview.content == handle.read(32)
+
+    result = _analyze(client, upload)
+    assert result == {
+        "filename": "no fire.mp4",
+        "outcome": "no_detection",
+        "confidence": None,
+        "status": "Completed successfully",
+        "provider": "Mock Video Analysis",
+        "incident_created": False,
+    }
+    assert client.get("/api/events").json() == before_events
+    assert service.get_metrics().model_dump() == before_metrics
+    assert client.get("/").text == before_dashboard
+    assert client.get("/incidents").text == before_history
 
 
 # PUBLIC_INTERFACE

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-import os
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -11,16 +10,13 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.providers.mock import MockDetectionProvider
-from app.routers.api import DEFAULT_MAX_UPLOAD_BYTES, create_api_router
+from app.routers.api import create_api_router
 from app.routers.pages import create_page_router
 from app.services.monitoring import MonitoringService
 from app.services.video_analysis import MockVideoAnalysisAdapter
 
 APP_DIRECTORY = Path(__file__).resolve().parent
 UPLOAD_DIRECTORY = APP_DIRECTORY / "uploads"
-
-# Optional VIDEO_UPLOAD_MAX_BYTES can be requested from the user for .env setup.
-MAX_UPLOAD_BYTES = int(os.environ.get("VIDEO_UPLOAD_MAX_BYTES", DEFAULT_MAX_UPLOAD_BYTES))
 
 
 def _cleanup_demo_uploads() -> None:
@@ -83,6 +79,5 @@ app.include_router(
         monitoring_service,
         video_analysis_adapter,
         UPLOAD_DIRECTORY,
-        max_upload_bytes=MAX_UPLOAD_BYTES,
     )
 )

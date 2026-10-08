@@ -89,14 +89,14 @@ background detection work.
   Only generated UUID-named MP4 files are removed on application startup and
   graceful shutdown; startup also removes leftovers after an interrupted run.
   Unrelated files are not removed. Run a single local application process.
-- The default limit is **100 MiB per file**. Optional `VIDEO_UPLOAD_MAX_BYTES`
-  overrides it with a positive integer byte count at application startup.
-  Request this variable for environment setup if a different limit is needed.
-  The application does not load `.env` itself; the launcher must supply it.
+- There is **no application-level video file-size limit**. Larger MP4 uploads,
+  including 167 MB files, are accepted subject to available local storage and
+  any external hosting/proxy constraints. The former `VIDEO_UPLOAD_MAX_BYTES`
+  setting is no longer used.
 - Uploads are copied in 1 MiB chunks rather than read entirely into memory.
-  Empty files return HTTP 400; files over the limit return HTTP 413. Failed
-  writes and rejected files do not retain partial output, and upload handles
-  are closed. Storage errors return HTTP 500.
+  This is a copy-buffer size, not a maximum file size. Empty files return HTTP
+  400. Failed writes and rejected files do not retain partial output, and
+  upload handles are closed. Storage errors return HTTP 500.
 - Non-MP4 extensions and unsupported declared MIME types return HTTP 400.
   Validation does **not** prove the bytes contain a playable MP4: the mock
   workflow intentionally does not decode media, inspect frames, or run ML.
@@ -105,8 +105,8 @@ Analysis uses only the supplied filename, not the uploaded video content. Case-i
 
 A positive result creates an in-memory incident visible in the dashboard, incident history, and events API, and increases the corresponding incident and alert counts. The incident uses the current UTC timestamp and the status `New — mock video analysis`. Positive results are deduplicated by the supplied filename, case-insensitively, for the application session, even when separate uploads have different IDs. No Detection and uploading alone never create incidents. The Video Testing UI submits the original filename returned by the upload endpoint.
 
-The size limit applies to the saved file after FastAPI parses multipart data,
-not to the entire incoming HTTP request. This local demo has no total-session
+FastAPI parses multipart data before the application copies the uploaded file.
+This local demo has no application-level file-size limit, total-session
 disk quota, expiration timer, cloud storage, or database; restarting clears
 generated videos and resets in-memory incidents.
 

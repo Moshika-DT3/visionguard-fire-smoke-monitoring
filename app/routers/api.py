@@ -20,7 +20,6 @@ from app.services.monitoring import MonitoringService
 from app.services.video_analysis import MockVideoAnalysisAdapter
 
 ALLOWED_VIDEO_CONTENT_TYPES = {"video/mp4", "application/mp4"}
-DEFAULT_MAX_UPLOAD_BYTES = 100 * 1024 * 1024
 UPLOAD_CHUNK_BYTES = 1024 * 1024
 logger = logging.getLogger(__name__)
 
@@ -30,8 +29,6 @@ def create_api_router(
     monitoring_service: MonitoringService,
     video_analysis_adapter: MockVideoAnalysisAdapter,
     upload_directory: Path,
-    *,
-    max_upload_bytes: int = DEFAULT_MAX_UPLOAD_BYTES,
 ) -> APIRouter:
     """Create JSON APIs for monitoring data and deterministic video testing.
 
@@ -39,13 +36,10 @@ def create_api_router(
         monitoring_service: Service supplying monitoring views and event creation.
         video_analysis_adapter: Replaceable uploaded-video analysis component.
         upload_directory: Application-controlled directory for uploaded MP4 files.
-        max_upload_bytes: Positive maximum saved file size, excluding multipart overhead.
 
     Returns:
         Router exposing existing monitoring APIs and Video Testing endpoints.
     """
-    if max_upload_bytes <= 0:
-        raise ValueError("max_upload_bytes must be positive")
     router = APIRouter(prefix="/api", tags=["Monitoring API"])
 
     @router.get(
@@ -86,13 +80,12 @@ def create_api_router(
         summary="Upload an MP4 video for testing",
         description=(
             "Stores a local demo MP4 for browser preview and deterministic mock "
-            "workflow validation. Only nonempty MP4 uploads within the configured "
-            "size limit are accepted. Validation uses extension and declared MIME "
+            "workflow validation. Nonempty MP4 uploads are accepted without an "
+            "application-level file-size limit. Validation uses extension and declared MIME "
             "type, not video decoding."
         ),
         responses={
             400: {"description": "Empty file or unsupported file type supplied."},
-            413: {"description": "Video exceeds the configured upload size limit."},
             500: {"description": "Local upload storage failed."},
         },
     )
@@ -100,8 +93,9 @@ def create_api_router(
     async def upload_video(file: UploadFile = File(...)) -> dict[str, str]:
         """Save multipart ``file`` in bounded chunks and return ID/name/preview URL.
 
-        Reject empty, unsupported or oversized files without retaining partial
-        output. This demo deliberately does not inspect or decode media bytes.
+        Reject empty or unsupported files without retaining partial output.
+        File size is unrestricted by the application; bounded reads limit the
+        copy buffer, not the upload size. This demo does not decode media bytes.
         """
         destination = None
         created = False
@@ -127,11 +121,6 @@ def create_api_router(
                 created = True
                 while chunk := await file.read(UPLOAD_CHUNK_BYTES):
                     size += len(chunk)
-                    if size > max_upload_bytes:
-                        raise HTTPException(
-                            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-                            detail=f"Video exceeds the {max_upload_bytes}-byte upload limit.",
-                        )
                     output.write(chunk)
             if size == 0:
                 raise HTTPException(

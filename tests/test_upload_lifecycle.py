@@ -1,4 +1,4 @@
-"""Step 2 regressions for bounded uploads and local demo session cleanup."""
+"""Regressions for chunked, size-unrestricted uploads and demo session cleanup."""
 
 from io import BytesIO
 from pathlib import Path
@@ -15,41 +15,39 @@ from app.services.monitoring import MonitoringService
 from app.services.video_analysis import MockVideoAnalysisAdapter
 
 
-def _router(directory, limit=8):
-    """Compose real upload routes with a small, deterministic test limit."""
+def _router(directory):
+    """Compose real upload routes without an application file-size limit."""
     return api.create_api_router(
         MonitoringService(MockDetectionProvider()),
         MockVideoAnalysisAdapter(),
         directory,
-        max_upload_bytes=limit,
     )
 
 
-def _application(directory, limit=8):
+def _application(directory):
     """Return isolated HTTP composition without touching production uploads."""
     application = FastAPI()
-    application.include_router(_router(directory, limit))
+    application.include_router(_router(directory))
     return application
 
 
 # PUBLIC_INTERFACE
-@pytest.mark.parametrize("content,expected", [(b"", 400), (b"123456789", 413)])
-def test_rejected_content_leaves_no_upload(tmp_path, content, expected):
-    """Empty and oversized files leave neither output nor monitoring changes."""
+def test_empty_content_leaves_no_upload(tmp_path):
+    """Empty files leave neither output nor monitoring changes."""
     with TestClient(_application(tmp_path)) as client:
         before = client.get("/api/events").json()
         response = client.post(
             "/api/video-tests/upload",
-            files={"file": ("fire_test.mp4", content, "video/mp4")},
+            files={"file": ("fire_test.mp4", b"", "video/mp4")},
         )
-        assert response.status_code == expected
+        assert response.status_code == 400
         assert list(tmp_path.iterdir()) == []
         assert client.get("/api/events").json() == before
 
 
 # PUBLIC_INTERFACE
-def test_exact_limit_and_repeated_uploads_remain_previewable(tmp_path):
-    """The inclusive limit preserves separate uploads and mock incident dedupe."""
+def test_repeated_uploads_remain_previewable(tmp_path):
+    """Separate uploads remain previewable and preserve mock incident dedupe."""
     with TestClient(_application(tmp_path)) as client:
         uploads = []
         for content in (b"12345678", b"abcdefgh"):
@@ -74,8 +72,8 @@ def test_exact_limit_and_repeated_uploads_remain_previewable(tmp_path):
 
 
 # PUBLIC_INTERFACE
-def test_oversized_upload_does_not_remove_previous_upload(tmp_path):
-    """Rejecting a replacement preserves the earlier successful preview."""
+def test_invalid_upload_does_not_remove_previous_upload(tmp_path):
+    """Rejecting a non-MP4 replacement preserves the earlier preview."""
     with TestClient(_application(tmp_path)) as client:
         upload = client.post(
             "/api/video-tests/upload",
@@ -83,9 +81,9 @@ def test_oversized_upload_does_not_remove_previous_upload(tmp_path):
         ).json()
         response = client.post(
             "/api/video-tests/upload",
-            files={"file": ("ordinary.mp4", b"too large", "video/mp4")},
+            files={"file": ("ordinary.avi", b"replacement", "video/mp4")},
         )
-        assert response.status_code == 413
+        assert response.status_code == 400
         assert client.get(upload["preview_url"]).content == b"original"
         assert len(list(tmp_path.iterdir())) == 1
 
@@ -198,8 +196,10 @@ def test_cleanup_with_absent_upload_directory(tmp_path, monkeypatch):
 
 
 # PUBLIC_INTERFACE
-@pytest.mark.parametrize("limit", [0, -1])
-def test_upload_limit_must_be_positive(tmp_path, limit):
-    """Reject invalid server limits during composition, not during uploads."""
-    with pytest.raises(ValueError, match="max_upload_bytes must be positive"):
-        _router(tmp_path, limit)
+def test_upload_schema_has_no_size_rejection(tmp_path):
+    """OpenAPI retains type/storage errors without advertising a size cap."""
+    operation = _application(tmp_path).openapi()["paths"]["/api/video-tests/upload"]["post"]
+    assert "413" not in operation["responses"]
+    assert "400" in operation["responses"]
+    assert "500" in operation["responses"]
+    assert "without an application-level file-size limit" in operation["description"]
