@@ -17,7 +17,10 @@ from app.models import (
     VideoAnalysisResult,
 )
 from app.services.monitoring import MonitoringService
-from app.services.video_analysis import MockVideoAnalysisAdapter
+from app.services.video_analysis import (
+    VideoAnalysisInferenceError,
+    YoloVideoAnalysisAdapter,
+)
 
 ALLOWED_VIDEO_CONTENT_TYPES = {"video/mp4", "application/mp4"}
 UPLOAD_CHUNK_BYTES = 1024 * 1024
@@ -27,14 +30,14 @@ logger = logging.getLogger(__name__)
 # PUBLIC_INTERFACE
 def create_api_router(
     monitoring_service: MonitoringService,
-    video_analysis_adapter: MockVideoAnalysisAdapter,
+    video_analysis_adapter: YoloVideoAnalysisAdapter,
     upload_directory: Path,
 ) -> APIRouter:
     """Create JSON APIs for monitoring data and deterministic video testing.
 
     Args:
         monitoring_service: Service supplying monitoring views and event creation.
-        video_analysis_adapter: Replaceable uploaded-video analysis component.
+        video_analysis_adapter: YOLO-powered uploaded-video analysis component.
         upload_directory: Application-controlled directory for uploaded MP4 files.
 
     Returns:
@@ -167,25 +170,36 @@ def create_api_router(
     @router.post(
         "/video-tests/{video_id}/analyze",
         response_model=VideoAnalysisResult,
-        summary="Run deterministic mock video analysis",
+        summary="Analyze an uploaded video with YOLO",
         description=(
-            "Uses filename-only mock rules for workflow validation: fire_test "
-            "maps to fire, smoke_vd maps to smoke, and all other filenames map "
-            "to no detection. No pixels, frames, or ML models are evaluated."
+            "Analyzes the verified uploaded MP4 with the configured YOLO model. "
+            "Fire takes precedence over smoke when both hazards qualify. The "
+            "filename remains display and incident-deduplication metadata."
         ),
-        responses={404: {"description": "Uploaded video was not found."}},
+        responses={
+            404: {"description": "Uploaded video was not found."},
+            503: {"description": "YOLO video analysis is temporarily unavailable."},
+        },
     )
     async def analyze_video(video_id: str, filename: str) -> VideoAnalysisResult:
         """Analyze a saved MP4 and create a positive monitoring event once per name."""
         if Path(video_id).name != video_id or not video_id.endswith(".mp4"):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
-        if not (upload_directory / video_id).is_file():
+        video_path = upload_directory / video_id
+        if not video_path.is_file():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Uploaded video was not found.",
             )
 
-        outcome, confidence = video_analysis_adapter.analyze(filename)
+        try:
+            outcome, confidence = video_analysis_adapter.analyze(video_path)
+        except VideoAnalysisInferenceError as error:
+            logger.exception("Unable to analyze uploaded video %s", video_id)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Video analysis is temporarily unavailable. Please try again.",
+            ) from error
         incident_created = False
         if outcome is not VideoAnalysisOutcome.NO_DETECTION:
             incident_created = monitoring_service.create_video_incident(

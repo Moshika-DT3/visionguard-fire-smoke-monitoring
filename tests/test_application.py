@@ -1,4 +1,4 @@
-"""HTTP regression coverage for the current VisionGuard mock application.
+"""HTTP regression coverage for the current VisionGuard application.
 
 Run from the repository root:
     .\\.venv\\Scripts\\python.exe -m pytest -q
@@ -13,21 +13,23 @@ monkeypatches that router with a fresh instance and restores it after each test.
 A recommended application testability improvement is to instantiate APIRouter
 inside create_page_router, as create_api_router already does; it is not required
 for the current single-composition entry point and is not implemented here.
-Tests use real templates, providers, adapters and routes, without servers, ML
-or video decoding.
+Tests use real templates, monitoring providers and routes, with a path-based
+YOLO adapter test double instead of ML inference or video decoding.
 Read-only smoke checks also verify the actual app.main:app composition.
 
 Current boundaries (not new requirements): upload validation checks extension and
 declared MIME type and rejects empty content, but imposes no file-size limit or
-MP4 byte inspection. Analysis trusts the query filename, not an association with
-the saved upload. Dedupe is per service
+MP4 byte inspection. Analysis receives the saved upload path; the query filename
+is display and incident-deduplication metadata only. Dedupe is per service
 session and case-insensitive filename, not file content or upload ID. Browser
 JavaScript execution and actual media playback require separate browser tests.
 If those contracts change later, application changes and new tests are needed.
 """
 
 from datetime import datetime, timezone
+from pathlib import Path
 import re
+from unittest.mock import create_autospec
 
 import pytest
 from fastapi import APIRouter, FastAPI
@@ -35,12 +37,13 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.testclient import TestClient
 
 from app.main import APP_DIRECTORY, app as production_app, templates
+from app.models import VideoAnalysisOutcome
 from app.providers.mock import MockDetectionProvider
 from app.routers import pages
 from app.routers.api import create_api_router
 from app.routers.pages import create_page_router
 from app.services.monitoring import MonitoringService
-from app.services.video_analysis import MockVideoAnalysisAdapter
+from app.services.video_analysis import YoloVideoAnalysisAdapter
 
 
 # PUBLIC_INTERFACE
@@ -52,7 +55,17 @@ def service():
 
 # PUBLIC_INTERFACE
 @pytest.fixture
-def client(service, tmp_path, monkeypatch):
+def video_analysis_adapter():
+    """Provide controlled inference results through the current adapter API."""
+    adapter = create_autospec(YoloVideoAnalysisAdapter, instance=True)
+    adapter.provider_name = YoloVideoAnalysisAdapter.provider_name
+    adapter.analyze.return_value = (VideoAnalysisOutcome.NO_DETECTION, None)
+    return adapter
+
+
+# PUBLIC_INTERFACE
+@pytest.fixture
+def client(service, tmp_path, monkeypatch, video_analysis_adapter):
     """Exercise production routes with real templates and temporary uploads."""
     # The current page factory registers handlers on a shared module router.
     # Replacing it avoids stale service closures without changing application code.
@@ -65,14 +78,20 @@ def client(service, tmp_path, monkeypatch):
     )
     application.include_router(create_page_router(templates, service))
     application.include_router(
-        create_api_router(service, MockVideoAnalysisAdapter(), tmp_path)
+        create_api_router(service, video_analysis_adapter, tmp_path)
     )
     with TestClient(application) as test_client:
         yield test_client
+    # Every analysis must use a saved upload, never the display/query filename.
+    for analysis_call in video_analysis_adapter.analyze.call_args_list:
+        (video_path,) = analysis_call.args
+        assert isinstance(video_path, Path)
+        assert video_path.parent == tmp_path
+        assert video_path.is_file()
 
 
 def _upload(client, filename="fire_test.mp4", content=b"mock video bytes"):
-    """Upload synthetic bytes; the mock deliberately never decodes video."""
+    """Upload synthetic bytes; inference is replaced by a test double."""
     response = client.post(
         "/api/video-tests/upload",
         files={"file": (filename, content, "video/mp4")},
@@ -82,7 +101,7 @@ def _upload(client, filename="fire_test.mp4", content=b"mock video bytes"):
 
 
 def _analyze(client, upload, filename=None):
-    """Call the existing query-filename analysis contract."""
+    """Analyze a saved upload with its display/deduplication filename."""
     response = client.post(
         f"/api/video-tests/{upload['video_id']}/analyze",
         params={"filename": filename or upload["filename"]},
@@ -204,7 +223,7 @@ def test_video_testing_page_controls_and_script(client):
     ]:
         assert f'id="{element_id}"' in response.text
     assert 'accept="video/mp4,.mp4"' in response.text
-    assert "Mock Video Analysis" in response.text
+    assert "YOLO Video Analysis" in response.text
     assert "/static/js/video_testing.js" in response.text
     assert client.get("/static/js/video_testing.js").status_code == 200
 
@@ -327,7 +346,7 @@ def test_167_mib_no_fire_upload_preview_and_analysis(client, service, tmp_path):
         "outcome": "no_detection",
         "confidence": None,
         "status": "Completed successfully",
-        "provider": "Mock Video Analysis",
+        "provider": "YOLO Video Analysis",
         "incident_created": False,
     }
     assert client.get("/api/events").json() == before_events
@@ -414,8 +433,14 @@ def test_analysis_requires_filename(client):
         ("ordinary.mp4", "no_detection", None, None),
     ],
 )
-def test_mock_analysis_incident_flow(client, service, filename, outcome, confidence, severity):
-    """Check each mock result and incident, dashboard and history side effects."""
+def test_analysis_incident_flow(
+    client, service, video_analysis_adapter, tmp_path,
+    filename, outcome, confidence, severity,
+):
+    """Check controlled path-based results and monitoring side effects."""
+    video_analysis_adapter.analyze.return_value = (
+        VideoAnalysisOutcome(outcome), confidence
+    )
     before = client.get("/api/events").json()
     upload = _upload(client, filename)
     # Upload alone must not create an incident.
@@ -423,13 +448,16 @@ def test_mock_analysis_incident_flow(client, service, filename, outcome, confide
     started_at = datetime.now(timezone.utc)
     result = _analyze(client, upload)
     finished_at = datetime.now(timezone.utc)
+    video_analysis_adapter.analyze.assert_called_once_with(
+        tmp_path / upload["video_id"]
+    )
     positive = outcome != "no_detection"
     assert result == {
         "filename": filename,
         "outcome": outcome,
         "confidence": confidence,
         "status": "Completed successfully",
-        "provider": "Mock Video Analysis",
+        "provider": "YOLO Video Analysis",
         "incident_created": positive,
     }
     events = client.get("/api/events").json()
@@ -460,9 +488,18 @@ def test_mock_analysis_incident_flow(client, service, filename, outcome, confide
 
 
 # PUBLIC_INTERFACE
-@pytest.mark.parametrize("filename", ["fire_test.mp4", "smoke_vd.mp4"])
-def test_duplicate_incident_prevention_across_uploads(client, filename):
+@pytest.mark.parametrize(
+    "filename,outcome,confidence",
+    [
+        ("fire_test.mp4", VideoAnalysisOutcome.FIRE, 0.96),
+        ("smoke_vd.mp4", VideoAnalysisOutcome.SMOKE, 0.89),
+    ],
+)
+def test_duplicate_incident_prevention_across_uploads(
+    client, video_analysis_adapter, filename, outcome, confidence,
+):
     """Check repeat analysis, case variants and reuploads share a dedupe key."""
+    video_analysis_adapter.analyze.return_value = (outcome, confidence)
     first = _upload(client, filename)
     assert _analyze(client, first)["incident_created"] is True
     expected_events = client.get("/api/events").json()
@@ -474,9 +511,16 @@ def test_duplicate_incident_prevention_across_uploads(client, filename):
 
 
 # PUBLIC_INTERFACE
-def test_distinct_positive_filenames_create_unique_incidents(client):
+def test_distinct_positive_filenames_create_unique_incidents(
+    client, video_analysis_adapter,
+):
     """Check distinct filenames create unique newest-first generated incidents."""
-    for filename in ["fire_test.mp4", "smoke_vd.mp4", "another_fire_test.mp4"]:
+    for filename, outcome, confidence in [
+        ("fire_test.mp4", VideoAnalysisOutcome.FIRE, 0.96),
+        ("smoke_vd.mp4", VideoAnalysisOutcome.SMOKE, 0.89),
+        ("another_fire_test.mp4", VideoAnalysisOutcome.FIRE, 0.96),
+    ]:
+        video_analysis_adapter.analyze.return_value = (outcome, confidence)
         assert _analyze(client, _upload(client, filename))["incident_created"] is True
     events = client.get("/api/events").json()
     assert [event["id"] for event in events[:3]] == [

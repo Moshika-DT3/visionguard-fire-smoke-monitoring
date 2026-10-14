@@ -13,7 +13,7 @@ from app.providers.mock import MockDetectionProvider
 from app.routers.api import create_api_router
 from app.routers.pages import create_page_router
 from app.services.monitoring import MonitoringService
-from app.services.video_analysis import MockVideoAnalysisAdapter
+from app.services.video_analysis import YoloVideoAnalysisAdapter
 
 APP_DIRECTORY = Path(__file__).resolve().parent
 UPLOAD_DIRECTORY = APP_DIRECTORY / "uploads"
@@ -50,7 +50,7 @@ async def lifespan(application: FastAPI):
 # VisionAI adapter that satisfies DetectionProvider without changing routes or UI.
 provider = MockDetectionProvider()
 monitoring_service = MonitoringService(provider)
-video_analysis_adapter = MockVideoAnalysisAdapter()
+video_analysis_adapter = YoloVideoAnalysisAdapter()
 templates = Jinja2Templates(directory=str(APP_DIRECTORY / "templates"))
 
 app = FastAPI(

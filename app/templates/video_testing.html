@@ -5,9 +5,9 @@
   <div>
     <p class="eyebrow">Workflow validation</p>
     <h1>Video Testing</h1>
-    <p class="muted">Upload an MP4 to preview and process through the deterministic Mock Video Analysis flow.</p>
+    <p class="muted">Upload an MP4 to preview and run real video analysis using YOLO.</p>
   </div>
-  <div class="operational-chip"><span class="status-dot active"></span>Mock workflow ready</div>
+  <div class="operational-chip"><span class="status-dot active"></span>YOLO workflow ready</div>
 </section>
 
 <section class="video-testing-grid">
@@ -36,7 +36,7 @@
         Your browser does not support MP4 video preview.
       </video>
       <p id="uploaded-filename" class="muted"></p>
-      <button id="analyze-button" class="button button-inline" type="button">Run Mock Analysis</button>
+      <button id="analyze-button" class="button button-inline" type="button">Run Analysis</button>
     </div>
   </article>
 
@@ -44,15 +44,15 @@
     <p class="eyebrow">Step 2</p>
     <h2>Analysis Result</h2>
     <div id="analysis-empty" class="analysis-empty">
-      <p>Upload an MP4 and run analysis to see a deterministic workflow result.</p>
-      <small>Provider: Mock Video Analysis</small>
+      <p>Upload an MP4 and run analysis to see the YOLO detection result.</p>
+      <small>Provider: YOLO Video Analysis</small>
     </div>
     <div id="analysis-result" hidden>
       <span id="outcome-badge" class="badge"></span>
       <dl class="result-list">
         <div><dt>Video</dt><dd id="result-filename"></dd></div>
         <div><dt>Outcome</dt><dd id="result-outcome"></dd></div>
-        <div id="confidence-row"><dt>Mock confidence</dt><dd id="result-confidence"></dd></div>
+        <div id="confidence-row"><dt>Detection confidence</dt><dd id="result-confidence"></dd></div>
         <div><dt>Analysis status</dt><dd id="result-status"></dd></div>
         <div><dt>Provider</dt><dd id="result-provider"></dd></div>
         <div><dt>Incident flow</dt><dd id="result-incident"></dd></div>

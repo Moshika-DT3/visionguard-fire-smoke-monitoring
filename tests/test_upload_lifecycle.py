@@ -2,6 +2,7 @@
 
 from io import BytesIO
 from pathlib import Path
+from unittest.mock import call, create_autospec
 
 import pytest
 from fastapi import FastAPI
@@ -9,25 +10,27 @@ from fastapi.testclient import TestClient
 from starlette.datastructures import UploadFile
 
 from app import main
+from app.models import VideoAnalysisOutcome
 from app.providers.mock import MockDetectionProvider
 from app.routers import api
 from app.services.monitoring import MonitoringService
-from app.services.video_analysis import MockVideoAnalysisAdapter
+from app.services.video_analysis import YoloVideoAnalysisAdapter
 
 
-def _router(directory):
+def _router(directory, video_analysis_adapter=None):
     """Compose real upload routes without an application file-size limit."""
     return api.create_api_router(
         MonitoringService(MockDetectionProvider()),
-        MockVideoAnalysisAdapter(),
+        video_analysis_adapter if video_analysis_adapter is not None
+        else YoloVideoAnalysisAdapter(),
         directory,
     )
 
 
-def _application(directory):
+def _application(directory, video_analysis_adapter=None):
     """Return isolated HTTP composition without touching production uploads."""
     application = FastAPI()
-    application.include_router(_router(directory))
+    application.include_router(_router(directory, video_analysis_adapter))
     return application
 
 
@@ -47,8 +50,11 @@ def test_empty_content_leaves_no_upload(tmp_path):
 
 # PUBLIC_INTERFACE
 def test_repeated_uploads_remain_previewable(tmp_path):
-    """Separate uploads remain previewable and preserve mock incident dedupe."""
-    with TestClient(_application(tmp_path)) as client:
+    """Separate upload paths remain previewable and preserve incident dedupe."""
+    adapter = create_autospec(YoloVideoAnalysisAdapter, instance=True)
+    adapter.provider_name = YoloVideoAnalysisAdapter.provider_name
+    adapter.analyze.return_value = (VideoAnalysisOutcome.FIRE, 0.96)
+    with TestClient(_application(tmp_path, adapter)) as client:
         uploads = []
         for content in (b"12345678", b"abcdefgh"):
             response = client.post(
@@ -68,6 +74,9 @@ def test_repeated_uploads_remain_previewable(tmp_path):
             assert response.status_code == 200
             assert response.json()["outcome"] == "fire"
             assert response.json()["incident_created"] is (index == 0)
+        assert adapter.analyze.call_args_list == [
+            call(tmp_path / upload["video_id"]) for upload in uploads
+        ]
         assert len(list(tmp_path.iterdir())) == 2
 
 
