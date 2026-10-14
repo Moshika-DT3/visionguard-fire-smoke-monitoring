@@ -28,13 +28,13 @@
   <article class="panel status-card">
     <p class="eyebrow">Active Sources</p>
     <h2>{{ system_status.active_sources }} / {{ system_status.total_sources }}</h2>
-    <p>Configured sample cameras currently active.</p>
+    <p>Configured YOLO camera sources currently active.</p>
   </article>
 </section>
 
 <section class="panel integration-note">
   <p class="eyebrow">Integration boundary</p>
-  <h2>Future VisionAI adapter</h2>
-  <p>The current <strong>Mock Detection Provider</strong> supplies deterministic sample data. A future VisionAI Framework package can be wrapped in a provider adapter that returns the same source and event models, without changing these pages or APIs.</p>
+  <h2>YOLO detection integration</h2>
+  <p>The current <strong>YOLO Detection Provider</strong> supplies YOLO-based detection results. A future VisionAI Framework package can be wrapped in a provider adapter that returns the same source and event models, without changing these pages or APIs.</p>
 </section>
 {% endblock %}
