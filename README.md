@@ -2,6 +2,31 @@
 
 VisionGuard is a standalone fire and smoke monitoring application built with Python, FastAPI, and Jinja2 templates. It uses deterministic in-memory sample data for the monitoring dashboard and real YOLO inference for uploaded MP4 video analysis. The baseline does not require a database, authentication, Docker, cloud services, or RTSP input.
 
+## Project structure
+
+The repository separates the FastAPI backend from the frontend assets it serves:
+
+```text
+visionguard-fire-smoke-monitoring/
+├── backend/                  # FastAPI application logic (Python package)
+│   ├── main.py               # Application entry point and composition (backend.main:app)
+│   ├── models.py             # Shared domain models
+│   ├── providers/            # DetectionProvider contract and Mock Detection Provider
+│   ├── routers/              # Page routes (pages.py) and JSON API routes (api.py)
+│   ├── services/             # MonitoringService and YOLO video analysis adapter
+│   ├── tests/                # Pytest regression suite (backend-only)
+│   ├── requirements.txt      # Backend Python dependencies
+│   ├── pyproject.toml        # Editable-install packaging for the backend package
+│   ├── pytest.ini            # Pytest discovery settings (tests, pythonpath)
+│   └── uploads/              # Runtime MP4 uploads (created on demand, ignored by Git)
+├── frontend/                 # Presentation layer served by the backend
+│   ├── templates/            # Jinja2 page templates
+│   └── static/               # CSS and browser JavaScript, served at /static
+└── README.md
+```
+
+The application is still a single FastAPI process: `backend/main.py` renders the Jinja2 templates from `frontend/templates/` and mounts `frontend/static/` at `/static`. Browser JavaScript calls the root-relative `/api` endpoints, so no frontend build step or separate frontend server is required.
+
 ## Baseline capabilities
 
 The dashboard at `/` presents the VisionGuard title, active camera count, total incident count, Fire and Smoke alert counts, operational status, and recent detection events. The application also includes camera inventory, incident history, system-status pages, and a responsive local HTML, CSS, and JavaScript interface.
@@ -17,24 +42,40 @@ MockDetectionProvider -> MonitoringService -> FastAPI routes -> Jinja2 pages and
 Uploaded MP4 -> YoloVideoAnalysisAdapter -> Video Testing API -> MonitoringService
 ```
 
-`app/providers/base.py` defines the read-only `DetectionProvider` contract. `app/providers/mock.py` implements that contract with deterministic sample cameras and events. `app/services/monitoring.py` consumes the contract to calculate dashboard metrics, filter incidents, and build system status. Page and API routes consume `MonitoringService`, rather than importing mock data directly.
+`backend/providers/base.py` defines the read-only `DetectionProvider` contract. `backend/providers/mock.py` implements that contract with deterministic sample cameras and events. `backend/services/monitoring.py` consumes the contract to calculate dashboard metrics, filter incidents, and build system status. Page and API routes consume `MonitoringService`, rather than importing mock data directly.
 
-Application composition is isolated in `app/main.py`, where `MockDetectionProvider` is instantiated and supplied to `MonitoringService`. Uploaded video analysis is handled separately by `YoloVideoAnalysisAdapter` in `app/services/video_analysis.py`. Successful Fire and Smoke results are added to the monitoring service as session-local incidents.
+Application composition is isolated in `backend/main.py`, where `MockDetectionProvider` is instantiated and supplied to `MonitoringService`. Uploaded video analysis is handled separately by `YoloVideoAnalysisAdapter` in `backend/services/video_analysis.py`. Successful Fire and Smoke results are added to the monitoring service as session-local incidents.
 
 ## Installation
 
 Use a supported Python environment and install the repository's dependencies:
 
 ```powershell
-python -m pip install -r requirements.txt
+python -m pip install -r backend/requirements.txt
 ```
+
+For reliable startup regardless of which directory a terminal or IDE happens
+to be in (for example after `cd backend`), also install the project itself
+in editable mode once. From the repository root:
+
+```powershell
+python -m pip install -e backend
+```
+
+(Equivalently, `cd backend` and run `python -m pip install -e .` there.)
+
+This registers the repository root on `sys.path` for every Python process in
+the environment via standard packaging metadata (`backend/pyproject.toml`), so
+`backend.*` imports resolve the same way whether a command is run from the
+repository root or from inside `backend/`. It only needs to be run once per
+environment and does not change any application behavior.
 
 ## Run the application
 
-Start the development server from the repository root:
+Start the development server from the repository root (the directory containing `backend/` and `frontend/`):
 
 ```powershell
-python -m uvicorn app.main:app --reload
+python -m uvicorn backend.main:app --reload
 ```
 
 Open the dashboard at [http://127.0.0.1:8000/](http://127.0.0.1:8000/). The FastAPI-generated API documentation is also available at [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
@@ -42,8 +83,49 @@ Open the dashboard at [http://127.0.0.1:8000/](http://127.0.0.1:8000/). The Fast
 For a manual team demo without automatic reload, use:
 
 ```powershell
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
 ```
+
+## Run the tests
+
+From the repository root:
+
+```powershell
+python -m pytest backend -q
+```
+
+Pytest configuration (`pytest.ini`) now lives in `backend/` alongside the
+tests it configures, so pointing pytest at the `backend` directory lets it
+discover `backend/pytest.ini` and resolve `backend/pytest.ini`'s
+`testpaths = tests` setting. Equivalently, run from inside `backend/`:
+
+```powershell
+cd backend
+python -m pytest -q
+```
+
+`backend/pytest.ini` also sets `pythonpath = ..` so the repository root is
+importable for `backend.*` imports regardless of which of the two
+equivalent commands above is used.
+
+### Troubleshooting: `ModuleNotFoundError: No module named 'backend'`
+
+`backend` is a package imported as `backend.*`, so the repository root (the directory that contains `backend/`, `frontend/`, and `README.md`) must be on `sys.path`. This error appears when the app or tests are started from inside `backend/` (for example `cd backend; uvicorn backend.main:app --reload`, `cd backend; uvicorn main:app`, or `pytest` run there without passing `backend/pytest.ini`'s `pythonpath` setting through `-e`/editable install), or with the old `app.main:app` path.
+
+This can happen even on the documented `uvicorn backend.main:app --reload`
+command if the terminal's working directory is `backend/` instead of the
+repository root: Python must resolve the top-level `backend` package *before*
+any code in `backend/main.py` runs, so a working-directory mismatch fails
+immediately with `ModuleNotFoundError: No module named 'backend'`, regardless
+of any `sys.path` handling inside `backend/main.py` itself.
+
+Two independent fixes are available:
+
+- Change to the repository root before running the command, and use
+  `python -m uvicorn backend.main:app --reload` or `python -m pytest backend -q`; or
+- Run `python -m pip install -e backend` once from the repository root (see
+  Installation above) so `backend` resolves as an installed package from any
+  working directory, including from inside `backend/`.
 
 ## Demo flow
 
@@ -82,7 +164,7 @@ background detection work.
 ## Video Testing upload lifecycle
 
 - Open `/video-testing` to upload, preview, and analyze an MP4 using YOLO.
-- Videos are stored locally in `app/uploads/` under unique UUID-based `.mp4`
+- Videos are stored locally in `backend/uploads/` under unique UUID-based `.mp4`
   names. This entire runtime directory is ignored by Git.
 - Successful uploads remain available during the current application session.
   Repeated filenames receive separate IDs and never overwrite earlier uploads.

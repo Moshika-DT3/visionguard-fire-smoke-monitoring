@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Sequence
 
-from app.models import (
+from backend.models import (
     CameraSource,
     CameraStatus,
     DetectionEvent,

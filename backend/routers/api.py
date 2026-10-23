@@ -9,15 +9,15 @@ from uuid import uuid4
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 
-from app.models import (
+from backend.models import (
     CameraSource,
     DetectionEvent,
     MonitoringStatus,
     VideoAnalysisOutcome,
     VideoAnalysisResult,
 )
-from app.services.monitoring import MonitoringService
-from app.services.video_analysis import (
+from backend.services.monitoring import MonitoringService
+from backend.services.video_analysis import (
     VideoAnalysisInferenceError,
     YoloVideoAnalysisAdapter,
 )

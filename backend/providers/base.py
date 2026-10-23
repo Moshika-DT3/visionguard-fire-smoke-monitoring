@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Protocol, Sequence
 
-from app.models import CameraSource, DetectionEvent, ProviderStatus
+from backend.models import CameraSource, DetectionEvent, ProviderStatus
 
 
 class DetectionProvider(Protocol):
