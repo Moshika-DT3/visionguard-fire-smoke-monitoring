@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from threading import Lock
 from typing import Any, ClassVar, Mapping, Sequence
@@ -44,12 +45,20 @@ class YoloVideoAnalysisAdapter:
     """
 
     provider_name = "YOLO Video Analysis"
+    model_path_env_var = "VISIONGUARD_YOLO_MODEL_PATH"
     default_model_path = Path(r"E:\Downloads\fire_smoke_yolov8n.pt")
     _model_cache: ClassVar[dict[Path, Any]] = {}
     _model_cache_lock: ClassVar[Lock] = Lock()
 
-    def __init__(self, model_path: str | Path = default_model_path) -> None:
-        """Configure the checkpoint that will be lazily loaded for inference."""
+    def __init__(self, model_path: str | Path | None = None) -> None:
+        """Configure the checkpoint that will be lazily loaded for inference.
+
+        Resolution order: explicit ``model_path`` argument, the
+        ``VISIONGUARD_YOLO_MODEL_PATH`` environment variable, then the legacy
+        default location.
+        """
+        if model_path is None:
+            model_path = os.environ.get(self.model_path_env_var) or self.default_model_path
         self._model_path = Path(model_path)
 
     # PUBLIC_INTERFACE
@@ -125,7 +134,9 @@ class YoloVideoAnalysisAdapter:
         resolved_model_path = self._model_path.expanduser().resolve()
         if not resolved_model_path.is_file():
             raise VideoAnalysisInferenceError(
-                f"YOLO checkpoint does not exist: {resolved_model_path}"
+                f"YOLO checkpoint does not exist: {resolved_model_path}. "
+                f"Place fire_smoke_yolov8n.pt there or set "
+                f"{self.model_path_env_var} to its location."
             )
 
         with self._model_cache_lock:

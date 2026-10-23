@@ -193,6 +193,11 @@ caches the `fire_smoke_yolov8n.pt` checkpoint from:
 E:\Downloads\fire_smoke_yolov8n.pt
 ```
 
+To use a different location, set the `VISIONGUARD_YOLO_MODEL_PATH` environment
+variable to the checkpoint's full path before starting the server (for example
+`$env:VISIONGUARD_YOLO_MODEL_PATH = "C:\models\fire_smoke_yolov8n.pt"`).
+The checkpoint file itself is not part of this repository.
+
 The model is loaded only when analysis is requested, so application startup
 does not depend on loading the checkpoint. The checkpoint must remain
 available at the configured path for video analysis to complete.
