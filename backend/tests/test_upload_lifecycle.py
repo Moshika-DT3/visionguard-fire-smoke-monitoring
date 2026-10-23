@@ -9,12 +9,12 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from starlette.datastructures import UploadFile
 
-from app import main
-from app.models import VideoAnalysisOutcome
-from app.providers.mock import MockDetectionProvider
-from app.routers import api
-from app.services.monitoring import MonitoringService
-from app.services.video_analysis import YoloVideoAnalysisAdapter
+from backend import main
+from backend.models import VideoAnalysisOutcome
+from backend.providers.mock import MockDetectionProvider
+from backend.routers import api
+from backend.services.monitoring import MonitoringService
+from backend.services.video_analysis import YoloVideoAnalysisAdapter
 
 
 def _router(directory, video_analysis_adapter=None):

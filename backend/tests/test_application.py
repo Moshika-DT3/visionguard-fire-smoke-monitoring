@@ -1,9 +1,9 @@
 """HTTP regression coverage for the current VisionGuard application.
 
 Run from the repository root:
-    .\\.venv\\Scripts\\python.exe -m pytest -q
+    .\\.venv\\Scripts\\python.exe -m pytest backend/tests -q
 Optional coverage:
-    .\\.venv\\Scripts\\python.exe -m pytest --cov=app --cov-report=term-missing
+    .\\.venv\\Scripts\\python.exe -m pytest --cov=backend --cov-report=term-missing
 
 Test dependencies: pytest, httpx (FastAPI TestClient), and optionally pytest-cov.
 No application files are changed. The router factories accept a fresh service
@@ -15,7 +15,7 @@ inside create_page_router, as create_api_router already does; it is not required
 for the current single-composition entry point and is not implemented here.
 Tests use real templates, monitoring providers and routes, with a path-based
 YOLO adapter test double instead of ML inference or video decoding.
-Read-only smoke checks also verify the actual app.main:app composition.
+Read-only smoke checks also verify the actual backend.main:app composition.
 
 Current boundaries (not new requirements): upload validation checks extension and
 declared MIME type and rejects empty content, but imposes no file-size limit or
@@ -36,14 +36,14 @@ from fastapi import APIRouter, FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.testclient import TestClient
 
-from app.main import APP_DIRECTORY, app as production_app, templates
-from app.models import VideoAnalysisOutcome
-from app.providers.mock import MockDetectionProvider
-from app.routers import pages
-from app.routers.api import create_api_router
-from app.routers.pages import create_page_router
-from app.services.monitoring import MonitoringService
-from app.services.video_analysis import YoloVideoAnalysisAdapter
+from backend.main import FRONTEND_DIRECTORY, app as production_app, templates
+from backend.models import VideoAnalysisOutcome
+from backend.providers.mock import MockDetectionProvider
+from backend.routers import pages
+from backend.routers.api import create_api_router
+from backend.routers.pages import create_page_router
+from backend.services.monitoring import MonitoringService
+from backend.services.video_analysis import YoloVideoAnalysisAdapter
 
 
 # PUBLIC_INTERFACE
@@ -73,7 +73,7 @@ def client(service, tmp_path, monkeypatch, video_analysis_adapter):
     application = FastAPI()
     application.mount(
         "/static",
-        StaticFiles(directory=str(APP_DIRECTORY / "static")),
+        StaticFiles(directory=str(FRONTEND_DIRECTORY / "static")),
         name="static",
     )
     application.include_router(create_page_router(templates, service))
@@ -108,6 +108,22 @@ def _analyze(client, upload, filename=None):
     )
     assert response.status_code == 200, response.text
     return response.json()
+
+
+def _parse_iso_timestamp(value):
+    """Parse a serialized ISO-8601 timestamp on Python 3.10 and newer.
+
+    Pydantic 2.x serializes timezone-aware ``datetime`` fields in
+    ``model_dump(mode="json")`` using a trailing "Z" for UTC (for example
+    ``2026-01-01T00:00:00Z``), which is valid ISO-8601/RFC 3339. However,
+    ``datetime.fromisoformat`` only gained native support for a trailing
+    "Z" in Python 3.11. On Python 3.10, calling it directly on such a value
+    raises ``ValueError``. Normalize the suffix to the explicit UTC offset
+    accepted by ``fromisoformat`` on every supported Python version.
+    """
+    if value.endswith("Z"):
+        value = f"{value[:-1]}+00:00"
+    return datetime.fromisoformat(value)
 
 
 # PUBLIC_INTERFACE
@@ -272,7 +288,7 @@ def test_events_api(client, service):
     assert [event["event_type"] for event in events] == [
         "fire", "smoke", "smoke", "fire", "smoke"
     ]
-    timestamps = [datetime.fromisoformat(event["detected_at"]) for event in events]
+    timestamps = [_parse_iso_timestamp(event["detected_at"]) for event in events]
     assert timestamps == sorted(timestamps, reverse=True)
 
 
@@ -480,7 +496,7 @@ def test_analysis_incident_flow(
     assert incident["confidence"] == confidence
     assert incident["severity"] == severity
     assert incident["status"] == "New — mock video analysis"
-    assert started_at <= datetime.fromisoformat(incident["detected_at"]) <= finished_at
+    assert started_at <= _parse_iso_timestamp(incident["detected_at"]) <= finished_at
     assert "VID-006" in client.get("/").text
     assert "VID-006" in client.get("/incidents", params={"type": outcome}).text
     opposite = "smoke" if outcome == "fire" else "fire"

@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "visionguard-fire-smoke-monitoring"
+version = "0.1.0"
+description = "VisionGuard standalone fire and smoke monitoring FastAPI application."
+requires-python = ">=3.10"
+
+# NOTE: Runtime dependencies are intentionally NOT declared here. The pinned
+# dependency set used to install and run the application lives in
+# requirements.txt (next to this file; see "Installation" in the repository
+# root README.md). This file exists solely so that the "backend" package
+# tree can be installed in *editable* mode (``pip install -e backend`` from
+# the repository root, or ``pip install -e .`` from inside this directory),
+# which registers the repository root on sys.path for every Python process
+# in the environment -- independent of the current working directory the
+# process happens to be started from.
+#
+# Why this matters: "backend" is imported throughout the codebase using
+# absolute "backend.*" import paths (see main.py in this directory). Without
+# an editable install, those imports only resolve when the repository root
+# is on sys.path, which normally only happens automatically when a process
+# is launched *from* the repository root (e.g. ``python -m uvicorn
+# backend.main:app`` run from the directory containing backend/). If a
+# process is instead launched with the working directory set to this
+# directory itself (for example by running ``uvicorn backend.main:app``
+# after ``cd backend``), Python's import machinery fails to locate the
+# "backend" package at all -- raising ``ModuleNotFoundError: No module
+# named 'backend'`` -- before any application code (including the sys.path
+# bootstrap already present in main.py) ever gets a chance to run. An
+# editable install removes this working-directory dependency entirely.
+#
+# No "readme" field is declared here: setuptools' pyproject.toml reader
+# disallows referencing files outside the directory containing this file
+# (security sandboxing of path expansion), and the project's README.md
+# lives one directory up at the repository root. The README remains the
+# canonical, human-readable project documentation; it is simply not wired
+# into this package's build metadata.
+#
+# This configuration file is intentionally placed inside backend/ (rather
+# than at the repository root) so that backend-specific build and test
+# configuration travels with the backend package itself. Because this file
+# no longer lives at the repository root, the "backend" package cannot be
+# located by treating this file's own directory as its parent -- instead it
+# IS this directory. [tool.setuptools] package-dir below maps the package
+# name "backend" explicitly to "." (this directory) so editable installs and
+# builds still resolve "backend.*" imports correctly regardless of where
+# this file sits relative to the package.
+
+[tool.setuptools]
+package-dir = {"backend" = "."}
+packages = [
+    "backend",
+    "backend.providers",
+    "backend.routers",
+    "backend.services",
+]

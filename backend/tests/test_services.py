@@ -2,10 +2,10 @@
 
 import pytest
 
-from app.models import EventType, Severity, VideoAnalysisOutcome
-from app.providers.mock import MockDetectionProvider
-from app.services.monitoring import MonitoringService
-from app.services.video_analysis import MockVideoAnalysisAdapter
+from backend.models import EventType, Severity, VideoAnalysisOutcome
+from backend.providers.mock import MockDetectionProvider
+from backend.services.monitoring import MonitoringService
+from backend.services.video_analysis import MockVideoAnalysisAdapter
 
 
 # PUBLIC_INTERFACE

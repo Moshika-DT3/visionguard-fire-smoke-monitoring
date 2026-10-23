@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Sequence
 
-from app.models import (
+from backend.models import (
     CameraSource,
     CameraStatus,
     DashboardMetrics,
@@ -15,7 +15,7 @@ from app.models import (
     Severity,
     VideoAnalysisOutcome,
 )
-from app.providers.base import DetectionProvider
+from backend.providers.base import DetectionProvider
 
 
 class MonitoringService:
