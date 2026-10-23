@@ -6,10 +6,11 @@ React 19 + TypeScript single-page app for the VisionGuard FastAPI backend. It mi
 
 ```bash
 # 1. Backend (from the repo root)
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+python -m pip install -r backend/requirements.txt   # first time only
+python -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
 
-# 2. Frontend
-cd frontend
+# 2. Frontend (in a second terminal)
+cd frontend_react
 npm install
 npm run dev        # http://localhost:5173
 ```
@@ -38,7 +39,7 @@ The backend has no metrics or filtered-events endpoint, so dashboard counts and 
 
 ```
 src/
-  api/        types.ts (mirrors app/models.py), client.ts (all endpoints), metrics.ts
+  api/        types.ts (mirrors backend/models.py), client.ts (all endpoints), metrics.ts
   hooks/      useApi.ts (fetch with abort, retry, polling)
   components/ Layout, PageHeading, Badges, States
   pages/      one file per route

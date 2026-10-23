@@ -1,4 +1,4 @@
-// TypeScript mirrors of the Pydantic models in app/models.py.
+// TypeScript mirrors of the Pydantic models in backend/models.py.
 
 export type CameraStatus = 'active' | 'offline'
 export type EventType = 'fire' | 'smoke'
