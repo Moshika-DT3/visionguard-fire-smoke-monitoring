@@ -2,6 +2,8 @@
 __pycache__/
 *.pyc
 .env
+app/uploads/
+models/
 .pytest_cache/
 .coverage
 
