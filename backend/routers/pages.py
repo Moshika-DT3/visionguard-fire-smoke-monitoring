@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Query, Request
 from fastapi.templating import Jinja2Templates
 
-from app.services.monitoring import MonitoringService
+from backend.services.monitoring import MonitoringService
 
 router = APIRouter(tags=["Monitoring pages"])
 

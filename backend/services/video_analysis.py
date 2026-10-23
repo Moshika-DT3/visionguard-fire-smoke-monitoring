@@ -6,7 +6,7 @@ from pathlib import Path
 from threading import Lock
 from typing import Any, ClassVar, Mapping, Sequence
 
-from app.models import VideoAnalysisOutcome
+from backend.models import VideoAnalysisOutcome
 
 
 class VideoAnalysisInferenceError(RuntimeError):
